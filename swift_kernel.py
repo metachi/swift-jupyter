@@ -278,6 +278,10 @@ class SwiftKernel(Kernel):
         except PreprocessorException as e:
             return PreprocessorError(e)
 
+        try:
+            preprocessed = self._preprocess_cell(preprocessed)
+        except PreprocessorException as e:
+            return PreprocessorError(e)
         return self._execute(preprocessed)
 
     def _preprocess(self, code):
@@ -290,6 +294,38 @@ class SwiftKernel(Kernel):
             all_packages += packages
         self._install_packages(all_packages)
         return '\n'.join(preprocessed_lines)
+
+    def _preprocess_cell(self, code):
+        lines = code.split('\n')
+        if len(lines) <= 1:
+            return code
+        maybe_magic_line, non_magic_code = lines[0], '\n'.join(lines[1:])
+
+        time_match = re.match(r'^\s*%%time\s*$', maybe_magic_line)
+        if time_match is not None:
+            return self._handle_time(non_magic_code)
+
+        timeit_match = re.match(r'^\s*%%timeit(.*)$', maybe_magic_line)
+        if timeit_match is not None:
+            try:
+                iterations = int(timeit_match.group(1))
+            except ValueError:
+                iterations = ''
+            return self._handle_timeit(non_magic_code, iterations)
+
+        return code
+
+    def _handle_time(self, code):
+        #TODO
+        #check for package
+        #add code
+        return "timeMagic{ %s \n}" % code
+
+    def _handle_timeit(self, code, iterations):
+        #TODO
+        #check for package
+        #add code
+        return "timeitMagic(%s){ %s \n}" % (iterations, code)
 
     def _handle_disable_completion(self):
         self.completion_enabled = False
