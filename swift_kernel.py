@@ -275,13 +275,10 @@ class SwiftKernel(Kernel):
     def _preprocess_and_execute(self, code):
         try:
             preprocessed = self._preprocess(code)
-        except PreprocessorException as e:
-            return PreprocessorError(e)
-
-        try:
             preprocessed = self._preprocess_cell(preprocessed)
         except PreprocessorException as e:
             return PreprocessorError(e)
+
         return self._execute(preprocessed)
 
     def _preprocess(self, code):
@@ -318,14 +315,15 @@ class SwiftKernel(Kernel):
     def _handle_time(self, code):
         #TODO
         #check for package
-        #add code
-        return "timeMagic{ %s \n}" % code
+        code = "let timeMagicTimer = TimeMagic.Timer(); " + code
+        code += "\ntimeMagicTimer.stop()"
+        code += "\nprint(timeMagicTimer.getTimeAsString())"
+        return code
 
     def _handle_timeit(self, code, iterations):
         #TODO
         #check for package
-        #add code
-        return "timeitMagic(%s){ %s \n}" % (iterations, code)
+        return "%s\nTimeMagic.timeitMagic(%s){ %s \n}" % (code, iterations, code)
 
     def _handle_disable_completion(self):
         self.completion_enabled = False
