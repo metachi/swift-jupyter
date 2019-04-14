@@ -5,7 +5,7 @@ with the [Swift for TensorFlow](https://github.com/tensorflow/swift) project.
 
 # Installation Instructions
 
-## With TensorFlow toolchain
+## Option 1: Using a Swift for TensorFlow toolchain and Virtualenv
 
 ### Requirements
 
@@ -22,48 +22,79 @@ Dependencies:
 
 ### Installation
 
-swift-jupyter requires a Swift toolchain with LLDB Python3 support. Currently, the only prebuilt toolchains with LLDB Python3 support are the [Swift for TensorFlow Ubuntu 18.04 Nightly Builds](https://github.com/tensorflow/swift/blob/master/Installation.md#pre-built-packages). Alternatively, you can build a toolchain from sources (see the next section for instructions).
+swift-jupyter requires a Swift toolchain with LLDB Python3 support. Currently, the only prebuilt toolchains with LLDB Python3 support are the [Swift for TensorFlow Ubuntu 18.04 Nightly Builds](https://github.com/tensorflow/swift/blob/master/Installation.md#pre-built-packages). Alternatively, you can build a toolchain from sources (see the section below for instructions).
 
 Extract the Swift toolchain somewhere.
 
 Create a virtualenv, install the requirements in it, and register the kernel in
 it:
 
-```
+```bash
 python3 -m venv venv
 . venv/bin/activate
 pip install -r requirements.txt
-pip install -r requirements_py_graphics.txt
 python register.py --sys-prefix --swift-toolchain <path to extracted swift toolchain directory>
 ```
 
 Finally, run Jupyter:
 
-```
+```bash
 . venv/bin/activate
 jupyter notebook
 ```
 
 You should be able to create Swift notebooks. Installation is done!
 
-### (optional) Building toolchain with LLDB Python3 support
+## Option 2: Using a Swift for TensorFlow toolchain and Conda
 
-Follow the
-[Building Swift for TensorFlow](https://github.com/apple/swift/tree/tensorflow#building-swift-for-tensorflow)
-instructions, with some modifications:
+### Requirements
 
-* Also install the Python 3 development headers. (For Ubuntu 18.04,
-  `sudo apt-get install libpython3-dev`). The LLDB build will automatically
-  find these and build with Python 3 support.
-* Instead of running `utils/build-script`, run
-  `SWIFT_PACKAGE=tensorflow_linux,no_test ./swift/utils/build-toolchain local.swift`
-  or `SWIFT_PACKAGE=tensorflow_linux ./swift/utils/build-toolchain local.swift,gpu,no_test`
-  (depending on whether you want to build tensorflow with GPU support).
+Operating system:
 
-This will create a tar file containing the full toolchain. You can now proceed
-with the installation instructions from the previous section.
+* Ubuntu 18.04 (64-bit); OR
+* other operating systems may work, but you will have to build Swift from
+  sources.
 
-## Using the Docker Container
+### Installation
+
+#### 1. Get toolchain
+
+swift-jupyter requires a Swift toolchain with LLDB Python3 support. Currently, the only prebuilt toolchains with LLDB Python3 support are the [Swift for TensorFlow Ubuntu 18.04 Nightly Builds](https://github.com/tensorflow/swift/blob/master/Installation.md#pre-built-packages). Alternatively, you can build a toolchain from sources (see the section below for instructions).
+
+Extract the Swift toolchain somewhere.
+
+Important note about CUDA/CUDNN: If you are using a CUDA toolchain, then you should install CUDA and CUDNN on your system
+without using Conda, because Conda's CUDNN is too old to work with the Swift toolchain's TensorFlow. (As of 2019-04-08,
+Swift for TensorFlow requires CUDNN 7.5, but Conda only has CUDNN 7.3).
+
+#### 2. Initialize environment
+
+Create a Conda environment and install some packages in it:
+
+```bash
+conda create -n swift-tensorflow python==3.6
+conda activate swift-tensorflow
+conda install jupyter numpy matplotlib
+```
+
+#### 3. Register kernel
+
+Register the Swift kernel with Jupyter:
+
+```bash
+python register.py --sys-prefix --swift-python-use-conda --use-conda-shared-libs \
+  --swift-toolchain <path to extracted swift toolchain directory>
+```
+
+Finally, run Jupyter:
+
+```bash
+jupyter notebook
+```
+
+You should be able to create Swift notebooks. Installation is done!
+
+## Option 3: Using the Docker Container
 
 This repository also includes a dockerfile which can be used to run a Jupyter Notebook instance which includes this Swift kernel. To build the container, the following command may be used:
 
@@ -87,6 +118,23 @@ The functions of these parameters are:
 - `--cap-add SYS_PTRACE` adjusts the privileges with which this container is run, which is required for the Swift REPL.
 
 - `-v <host path>:/notebooks` bind mounts a host directory as a volume where notebooks created in the container will be stored.  If this command is omitted, any notebooks created using the container will not be persisted when the container is stopped.
+
+## (optional) Building toolchain with LLDB Python3 support
+
+Follow the
+[Building Swift for TensorFlow](https://github.com/apple/swift/tree/tensorflow#building-swift-for-tensorflow)
+instructions, with some modifications:
+
+* Also install the Python 3 development headers. (For Ubuntu 18.04,
+  `sudo apt-get install libpython3-dev`). The LLDB build will automatically
+  find these and build with Python 3 support.
+* Instead of running `utils/build-script`, run
+  `SWIFT_PACKAGE=tensorflow_linux,no_test ./swift/utils/build-toolchain local.swift`
+  or `SWIFT_PACKAGE=tensorflow_linux ./swift/utils/build-toolchain local.swift,gpu,no_test`
+  (depending on whether you want to build tensorflow with GPU support).
+
+This will create a tar file containing the full toolchain. You can now proceed
+with the installation instructions from the previous section.
 
 # Usage Instructions
 
@@ -146,10 +194,15 @@ display.display(pd.DataFrame.from_records([["col 1": 3, "col 2": 5], ["col 1": 8
 
 ## %install directives
 
+**Note: Requires a Swift for TensorFlow toolchain built on or after March 20, 2019.**
+
 `%install` directives let you install SwiftPM packages so that your notebook
 can import them:
 
 ```swift
+// Specify SwiftPM flags to use during package installation.
+%install-swiftpm-flags -c release
+
 // Install the DeckOfPlayingCards package from GitHub.
 %install '.package(url: "https://github.com/NSHipster/DeckOfPlayingCards", from: "4.0.0")' DeckOfPlayingCards
 
@@ -162,13 +215,12 @@ The next argument(s) to `%install` are the products that you want to install fro
 
 `%install` directives currently have some limitations:
 
-* You can only install packages once before you have to restart the kernel.
-  We recommend having one cell at the beginning of your notebook that installs
-  all the packages that the notebook needs.
-* Packages that (transitively) depend on C source code are not supported.
+* You must install all your packages in the first cell that you execute. (It
+  will refuse to install packages, and print out an error message explaining
+  why, if you try to install packages in later cells.)
 * Downloads and build artifacts are not cached.
-* Some parts of packages get installed in a global directory, so two kernels
-  that are running at the same time can clobber each other's installations.
+* `%install-swiftpm-flags` apply to all packages that you are installing; there
+  is no way to specify different flags for different packages.
 
 ## %include directives
 
